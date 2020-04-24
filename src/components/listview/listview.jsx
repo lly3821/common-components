@@ -1,15 +1,15 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import './index.less';
+import './listview.less';
 
-const refreshTip = { 
+const REFRESHTIP = { 
   pull: '下拉刷新',
   release: '释放刷新',
   loading: '加载中...',
   refreshed: '已刷新'
 }
 
-const bottomTip = {
+const BOTTOMTIP = {
   loading: '正在加载中...',
   loaded: '已经到底啦~'
 }
@@ -18,7 +18,6 @@ export default class ListView extends React.Component{
   constructor (props) {
     super(props);
     this.state = {
-      init: false, 
       refreshProps: {
         pullHeight: 0,
         touchStart: 0,
@@ -28,16 +27,25 @@ export default class ListView extends React.Component{
   }
 
   static defaultProps = {
-    refreshStatus: 'pull',
-    loadingMore: true,
-    height: '100%',
+    height: 400,
+    refreshing: false,
     refreshHandler: () => {}, 
+    onReachBottom: () => {},
+    loadingMore: true,
+    loading: false,  
+    refreshTip: REFRESHTIP,
+    bottomTip: BOTTOMTIP,  
   };
 
   static propTypes = {
-    refreshStatus: PropTypes.string,
-    loadingMore: PropTypes.bool,
+    height: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    refreshing: PropTypes.bool,
     refreshHandler: PropTypes.func,
+    onReachBottom: PropTypes.func,
+    loadingMore: PropTypes.bool,
+    loading: PropTypes.bool,
+    refreshTip: PropTypes.object,
+    bottomTip: PropTypes.object,
   };
 
   componentDidMount() {
@@ -45,6 +53,12 @@ export default class ListView extends React.Component{
     this.scroll.addEventListener('touchstart', this.onTouchStart, { passive: true });
     this.scroll.addEventListener('touchmove', this.onTouchMove, { passive: false });
     this.scroll.addEventListener('touchend', this.onTouchEnd, { passive: true });
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.refreshing !== this.props.refreshing && !this.props.refreshing) {
+      this.endRefreshFetching()
+    }    
   }
 
   componentWillUnmount() {
@@ -88,19 +102,24 @@ export default class ListView extends React.Component{
       refreshProps.pullHeight = 40;
       refreshProps.status = 'loading';
       this.setState({ refreshProps });
-      try {
-        await this.props.refreshHandler()
-        this.setState(({ refreshProps }) => { 
-          return ({ refreshProps: { ...refreshProps, status: 'refreshed' } }) 
-        })
-      } catch (err) {
-        console.log(err)
-      }
+      this.props.refreshHandler()
     } else {
-      refreshProps.pullHeight = 0;
-      this.setState({ refreshProps });
+      this.reset();
     }
   };
+
+  endRefreshFetching = () => {
+    this.setState(({ refreshProps }) => { return (
+      { refreshProps: { ...refreshProps, pullHeight: 40, status: 'refreshed'} }
+    )});
+    setTimeout(this.reset, 1000)
+  }
+
+  reset = () => {
+    this.setState(({ refreshProps }) => { return (
+      { refreshProps: { ...refreshProps, pullHeight: 0, status: 'pull'} }
+    )}, );
+  }
 
   onReachBottom = e => {
     const { clientHeight, scrollHeight, scrollTop } = e.target;
@@ -112,21 +131,24 @@ export default class ListView extends React.Component{
   };
 
   render () {
-    const { height, loadingMore, loading } = this.props;
+    const { height, loadingMore, loading, refreshTip, bottomTip } = this.props;
     const { refreshProps } = this.state;
     const { pullHeight, status } = refreshProps;
+
+    const combineRefreshTip = {...REFRESHTIP, ...refreshTip}
+    const combineBottomTip = {...BOTTOMTIP, ...bottomTip}
 
     return (
       <div className="listview-wrap" style={{ height }} ref={e => this.scroll = e}>
         <div className="refresh-wrap" style={{ height: pullHeight }}>
-          {refreshTip[status]}
+          {combineRefreshTip[status]}
         </div>
         {this.props.children}
         {loading && 
-          <div className="bottom-tip">{bottomTip.loading}</div>
+          <div className="bottom-tip">{combineBottomTip.loading}</div>
         }
-        {!loadingMore && 
-          <div className="bottom-tip">{bottomTip.loaded}</div>
+        {!loading && !loadingMore && 
+          <div className="bottom-tip">{combineBottomTip.loaded}</div>
         }
       </div>
     )
