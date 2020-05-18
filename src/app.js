@@ -11,6 +11,7 @@ export default class App extends React.Component {
         <header className="head">组件列表</header>
         <ul className="component-list">
           <Link to="/listview"><li>ListView</li></Link>
+          <Link to="/imagePreview"><li>ImagePreview</li></Link>
         </ul>
       </div>
     )
