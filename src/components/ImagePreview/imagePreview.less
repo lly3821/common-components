@@ -6,6 +6,7 @@
   width: 100vw;
   background-color: #000000;
   overflow-y: hidden;
+  touch-action: none;
   .scroll-x-wrap {
     height: calc(~'100vh + 10px');
     overflow-y: hidden;
@@ -17,19 +18,27 @@
   }
   .img-wrap {
     min-width: 100vw;
+    max-width: 100vw;
     height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    touch-action: none;
+    overflow-x: scroll;
+    overflow-y: scroll;
+    position: relative;
     .width-larger {
       margin: 0;
       width: 100vw;
       height: auto;
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
     }
     .height-larger {
       margin: 0;
       height: 100vh;
       width: auto;
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
     }
   }
 }
