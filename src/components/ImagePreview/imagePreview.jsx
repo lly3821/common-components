@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import {setGesture, scaleImg} from './method';
 import './imagePreview.less';
 
 export default class ImagePreview extends React.Component {
@@ -10,10 +11,8 @@ export default class ImagePreview extends React.Component {
       index: 0,
       scrollLeft: 0,
     };
-    this.clickCount = 0;
-    this.optType = null;
-    this.isDbLarger = false;
-    this.distance = 0;
+    this.isScale = false;
+    this.scale = 1;
   }
 
   static defaultProps = {
@@ -35,13 +34,15 @@ export default class ImagePreview extends React.Component {
     this.imgScroll.addEventListener('touchstart', this.onTouchStart, {
       passive: true,
     });
-    this.imgScroll.addEventListener('touchmove', this.onTouchMove);
+    this.imgScroll.addEventListener('touchmove', this.onTouchMove, {
+      passive: false,
+    });
     this.imgScroll.addEventListener('touchend', this.onTouchEnd, {
       passive: true,
     });
   }
 
-  onTouchStart = (e) => {
+  onTouchStart = () => {
     this.setState({
       scrollLeft: this.imgScroll.scrollLeft,
     });
@@ -51,8 +52,8 @@ export default class ImagePreview extends React.Component {
   onTouchMove = (e) => {
     const {scrollLeft} = this.state;
     const lastestX = e.changedTouches[0].clientX;
-    this.distance += (this.lastestX || lastestX) - lastestX;
-    this.imgScroll.scrollLeft = scrollLeft + this.distance;
+    this.dx += (this.lastestX || lastestX) - lastestX;
+    this.imgScroll.scrollLeft = scrollLeft + this.dx;
     this.lastestX = lastestX;
   };
 
@@ -62,27 +63,26 @@ export default class ImagePreview extends React.Component {
     let toIndex;
     let judgeD = new Date().getTime() - this.startTime < 200 ? 1 : 60;
     if (
-      this.distance > judgeD &&
+      this.dx > judgeD &&
       this.imgScroll.scrollLeft < window.innerWidth * (imgs.length - 1)
     ) {
       this.initImgSize();
-      console.log(this.imgScroll.scrollLeft);
       toIndex = index + 1 > urls.length - 1 ? urls.length - 1 : index + 1;
       this.setState({index: toIndex});
       this.move(10, toIndex);
     }
-    if (this.distance <= judgeD && this.distance >= -judgeD) {
+    if (this.dx <= judgeD && this.dx >= -judgeD) {
       toIndex = index;
       this.setState({index: toIndex});
       this.move(10, toIndex);
     }
-    if (this.distance < -judgeD && this.imgScroll.scrollLeft > 0) {
+    if (this.dx < -judgeD && this.imgScroll.scrollLeft > 0) {
       this.initImgSize();
       toIndex = index - 1 < 0 ? 0 : index - 1;
       this.setState({index: toIndex});
       this.move(-10, toIndex);
     }
-    this.distance = 0;
+    this.dx = 0;
     this.lastestX = null;
   };
 
@@ -100,77 +100,58 @@ export default class ImagePreview extends React.Component {
   };
 
   imgSizeMap = (urls) => {
-    urls.forEach((item) => {
-      this.getImgSize(item);
+    urls.forEach((item, index) => {
+      this.getImgSize(item, index);
     });
   };
 
   initImgSize = () => {
     const {imgs} = this.state;
-    this.isDbLarger = false;
+    this.isScale = false;
     imgs.forEach((item) => {
-      item.style.width = '';
-      item.style.height = '';
+      item.style = '';
     });
   };
 
   setImgHandler = (img) => {
-    img.addEventListener('dblclick', () => {
-      const {imgs, index} = this.state;
-      this.isDbLarger = !this.isDbLarger;
-      if (img.height / img.width > window.innerHeight / window.innerWidth) {
-        imgs[index].style.height = this.isDbLarger
-          ? window.innerHeight * 1.5 + 'px'
-          : '';
-        img.parentNode.scrollTop = window.innerHeight / 4;
-      } else {
-        imgs[index].style.width = this.isDbLarger
-          ? window.innerWidth * 1.5 + 'px'
-          : '';
-        img.parentNode.scrollLeft = window.innerWidth / 4;
+    const imgGesture = setGesture(img);
+    imgGesture.gesturedbl = () => {
+      this.isScale = !this.isScale;
+      if (!this.isScale) {
+        return this.initImgSize();
       }
-    });
-    img.addEventListener('touchstart', (e) => {
-      this.imgLeftStart = e.changedTouches[0].clientX;
-      this.imgScrollLeft = img.parentNode.scrollLeft;
-      this.imgTopStart = e.changedTouches[0].clientY;
-      this.imgScrollTop = img.parentNode.scrollTop;
-    });
-
-    img.addEventListener('touchmove', (e) => {
-      if (!this.isDbLarger) {
-        return e.preventDefault();
+      const {width, height} = scaleImg(img, 1.5, {});
+      img.parentNode.scrollLeft = (width - window.innerWidth) / 2;
+      img.parentNode.scrollTop = (height - window.innerHeight) / 2;
+    };
+    imgGesture.gesturestart = () => {
+      this.startSize = {height: img.height, width: img.width};
+      this.imgWrapScroll = {
+        l: img.parentNode.scrollLeft,
+        t: img.parentNode.scrollTop,
+      };
+    };
+    imgGesture.gesturemove = (e) => {
+      img.parentNode.scrollLeft = this.imgWrapScroll.l + e.move.dx;
+      img.parentNode.scrollTop = this.imgWrapScroll.t + e.move.dy;
+    };
+    imgGesture.gestureresize = (e) => {
+      this.isScale = true;
+      const {scale, width, height} = scaleImg(img, e.scale, this.startSize);
+      if (scale === 1) {
+        this.isScale = false;
       }
-      if (
-        img.parentNode.scrollLeft < img.width - window.innerWidth &&
-        img.width > window.innerWidth &&
-        img.parentNode.scrollLeft > 0
-      ) {
-        this.lastestX = null;
-        e.stopPropagation();
-      }
-      const scrollLeft =
-        this.imgScrollLeft + this.imgLeftStart - e.changedTouches[0].clientX;
-      const scrollTop =
-        this.imgScrollTop + this.imgTopStart - e.changedTouches[0].clientY;
-
-      img.parentNode.scrollLeft =
-        scrollLeft > img.width - window.innerWidth
-          ? img.width - window.innerWidth
-          : scrollLeft;
-      img.parentNode.scrollTop =
-        scrollTop > img.height - window.innerHeight
-          ? img.height - window.innerHeight
-          : scrollTop;
-    });
+      img.parentNode.scrollLeft = (width - window.innerWidth) / 2;
+      img.parentNode.scrollTop = (height - window.innerHeight) / 2;
+    };
   };
 
-  getImgSize = (url) => {
+  getImgSize = (url, index) => {
     let img = new Image();
     let timer = null;
     img.src = url;
 
-    this.setImgHandler(img);
+    this.setImgHandler(img, index);
     timer = setInterval(() => {
       if (img.width > 0 && img.height > 0) {
         clearInterval(timer);
